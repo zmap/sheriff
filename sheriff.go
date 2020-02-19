@@ -24,6 +24,13 @@ type Options struct {
 	// will not marshal the field.
 	ApiVersion *version.Version
 
+	// OutputFieldWithNoGroup causes fields with no group tag to be included in
+	// the output. Default behavior is to skip fields without a group tag.
+	// Fields with group tags that do not match any of the names in Groups will
+	// still be ignored. This is useful if an object has a large number of
+	// fields, and only a small number are tagged as optional additional output.
+	OutputFieldsWithNoGroup bool
+
 	// This is used internally so that we can propagate anonymous fields groups tag to all child field.
 	nestedGroupsMap map[string][]string
 }

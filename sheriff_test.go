@@ -649,3 +649,45 @@ func TestMarshal_Inet(t *testing.T) {
 
 	assert.Equal(t, string(expected), string(actual))
 }
+
+type HalfTagged struct {
+	WithTag    string `groups:"a"`
+	WithoutTag string
+}
+
+type TestOutputNoGroup struct {
+	SubrecordWithNoTag HalfTagged
+	FieldWithNoGroup   string
+	FieldWithGroup     string `groups:"b"`
+}
+
+func verifyOutputNoGroupTest(t *testing.T, v *TestOutputNoGroup, options *Options, expected string) {
+	m, err := Marshal(options, v)
+	assert.NoError(t, err)
+	b, err := json.Marshal(m)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
+
+func TestMarshalOutputNoGroup(t *testing.T) {
+	v := TestOutputNoGroup{
+		SubrecordWithNoTag: HalfTagged{
+			WithTag:    "tagged_child",
+			WithoutTag: "untagged_child",
+		},
+		FieldWithNoGroup: "no_group",
+		FieldWithGroup:   "group",
+	}
+	expectedOnlyA := `{}` // No inheritance by default
+	expectedOnlyANoIgnores := `{"FieldWithNoGroup":"no_group","SubRecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
+	expectedOnlyB := `{"FieldWithGroup":"group"}`
+	expectedOnlyBNoIgnores := `{"SubrecordWithNoTag":{"WithoutTag":"untagged_child"},"FieldWithNoGroup":"no_group"}`
+	expectedAAndB := expectedOnlyB // No inheritance by default
+	expectedAAndBNoIgnores := `{"FieldWithNoGroup":"no_group","FieldWithGroup":"group",SubRecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a"}}, expectedOnlyA)
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"b"}}, expectedOnlyB)
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a", "b"}}, expectedAAndB)
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a"}, OutputFieldsWithNoGroup: true}, expectedOnlyANoIgnores)
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"b"}, OutputFieldsWithNoGroup: true}, expectedOnlyBNoIgnores)
+	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a", "b"}, OutputFieldsWithNoGroup: true}, expectedAAndBNoIgnores)
+}
