@@ -67,7 +67,7 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 		options.nestedGroupsMap = make(map[string][]string)
 	}
 
-	checkGroups := len(options.Groups) > 0
+	checkGroups := len(options.Groups) > 0 || options.OutputFieldsWithNoGroup
 
 	if t.Kind() == reflect.Ptr {
 		// follow pointer
@@ -135,8 +135,11 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 				if len(groups) == 0 && options.nestedGroupsMap[field.Name] != nil {
 					groups = append(groups, options.nestedGroupsMap[field.Name]...)
 				}
-				shouldShow := listContains(groups, options.Groups)
-				if !shouldShow || len(groups) == 0 {
+				shouldShow := options.OutputFieldsWithNoGroup
+				if len(groups) > 0 {
+					shouldShow = listContains(groups, options.Groups)
+				}
+				if !shouldShow {
 					continue
 				}
 			}

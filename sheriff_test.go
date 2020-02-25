@@ -679,11 +679,11 @@ func TestMarshalOutputNoGroup(t *testing.T) {
 		FieldWithGroup:   "group",
 	}
 	expectedOnlyA := `{}` // No inheritance by default
-	expectedOnlyANoIgnores := `{"FieldWithNoGroup":"no_group","SubRecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
+	expectedOnlyANoIgnores := `{"FieldWithNoGroup":"no_group","SubrecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
 	expectedOnlyB := `{"FieldWithGroup":"group"}`
-	expectedOnlyBNoIgnores := `{"SubrecordWithNoTag":{"WithoutTag":"untagged_child"},"FieldWithNoGroup":"no_group"}`
+	expectedOnlyBNoIgnores := `{"FieldWithGroup":"group","FieldWithNoGroup":"no_group","SubrecordWithNoTag":{"WithoutTag":"untagged_child"}}`
 	expectedAAndB := expectedOnlyB // No inheritance by default
-	expectedAAndBNoIgnores := `{"FieldWithNoGroup":"no_group","FieldWithGroup":"group",SubRecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
+	expectedAAndBNoIgnores := `{"FieldWithGroup":"group","FieldWithNoGroup":"no_group","SubrecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
 	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a"}}, expectedOnlyA)
 	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"b"}}, expectedOnlyB)
 	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a", "b"}}, expectedAAndB)
