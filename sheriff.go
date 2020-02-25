@@ -24,6 +24,13 @@ type Options struct {
 	// will not marshal the field.
 	ApiVersion *version.Version
 
+	// OutputFieldWithNoGroup causes fields with no group tag to be included in
+	// the output. Default behavior is to skip fields without a group tag.
+	// Fields with group tags that do not match any of the names in Groups will
+	// still be ignored. This is useful if an object has a large number of
+	// fields, and only a small number are tagged as optional additional output.
+	OutputFieldsWithNoGroup bool
+
 	// This is used internally so that we can propagate anonymous fields groups tag to all child field.
 	nestedGroupsMap map[string][]string
 }
@@ -60,7 +67,7 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 		options.nestedGroupsMap = make(map[string][]string)
 	}
 
-	checkGroups := len(options.Groups) > 0
+	checkGroups := len(options.Groups) > 0 || options.OutputFieldsWithNoGroup
 
 	if t.Kind() == reflect.Ptr {
 		// follow pointer
@@ -128,8 +135,11 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 				if len(groups) == 0 && options.nestedGroupsMap[field.Name] != nil {
 					groups = append(groups, options.nestedGroupsMap[field.Name]...)
 				}
-				shouldShow := listContains(groups, options.Groups)
-				if !shouldShow || len(groups) == 0 {
+				shouldShow := options.OutputFieldsWithNoGroup
+				if len(groups) > 0 {
+					shouldShow = listContains(groups, options.Groups)
+				}
+				if !shouldShow {
 					continue
 				}
 			}
