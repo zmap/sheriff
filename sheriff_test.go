@@ -168,7 +168,7 @@ func TestMarshal_GroupsNoGroups(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestVersionsModel struct {
@@ -210,7 +210,7 @@ func TestMarshal_Versions(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 
 	// Api Version 2
 	v2, err := version.NewVersion("2.0.0")
@@ -234,7 +234,7 @@ func TestMarshal_Versions(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 
 	// Api Version 2.1
 	v21, err := version.NewVersion("2.1.0")
@@ -281,7 +281,7 @@ func TestMarshal_Versions(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type IsMarshaller struct {
@@ -347,7 +347,7 @@ func TestMarshal_Recursive(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestNoJSONTagModel struct {
@@ -377,7 +377,7 @@ func TestMarshal_NoJSONTAG(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type UserInfo struct {
@@ -414,8 +414,18 @@ func TestMarshal_ParentInherit(t *testing.T) {
 		"ID": "F94",
 	})
 	assert.NoError(t, err)
+	assert.JSONEq(t, string(expected), string(actual))
 
-	assert.Equal(t, string(expected), string(actual))
+	o.InheritGroups = true
+	expectedInherit, err := json.Marshal(map[string]interface{}{
+		"ID":    "F94",
+		"Email": "hello@hello.com",
+	})
+	actualInheritMap, err := Marshal(o, testModel)
+	assert.NoError(t, err)
+	actualInherit, err := json.Marshal(actualInheritMap)
+	assert.NoError(t, err)
+	assert.JSONEq(t, string(expectedInherit), string(actualInherit))
 
 }
 
@@ -445,7 +455,7 @@ func TestMarshal_TimeHack(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type EmptyMapTest struct {
@@ -471,7 +481,7 @@ func TestMarshal_EmptyMap(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestMarshal_Embedded struct {
@@ -502,7 +512,7 @@ func TestMarshal_EmbeddedField(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestMarshal_EmbeddedEmpty struct {
@@ -532,7 +542,7 @@ func TestMarshal_EmbeddedFieldEmpty(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type InterfaceableBeta struct {
@@ -586,7 +596,7 @@ func TestMarshal_ArrayOfInterfaceable(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestInlineStruct struct {
@@ -620,7 +630,7 @@ func TestMarshal_InlineStruct(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type TestInet struct {
@@ -647,7 +657,7 @@ func TestMarshal_Inet(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Equal(t, string(expected), string(actual))
+	assert.JSONEq(t, string(expected), string(actual))
 }
 
 type HalfTagged struct {
@@ -661,12 +671,12 @@ type TestOutputNoGroup struct {
 	FieldWithGroup     string `groups:"b"`
 }
 
-func verifyOutputNoGroupTest(t *testing.T, v *TestOutputNoGroup, options *Options, expected string) {
+func verifyOutputGivenOptions(t *testing.T, v interface{}, options *Options, expected string) {
 	m, err := Marshal(options, v)
 	assert.NoError(t, err)
 	b, err := json.Marshal(m)
 	assert.NoError(t, err)
-	assert.Equal(t, expected, string(b))
+	assert.JSONEq(t, expected, string(b))
 }
 
 func TestMarshalOutputNoGroup(t *testing.T) {
@@ -684,10 +694,73 @@ func TestMarshalOutputNoGroup(t *testing.T) {
 	expectedOnlyBNoIgnores := `{"FieldWithGroup":"group","FieldWithNoGroup":"no_group","SubrecordWithNoTag":{"WithoutTag":"untagged_child"}}`
 	expectedAAndB := expectedOnlyB // No inheritance by default
 	expectedAAndBNoIgnores := `{"FieldWithGroup":"group","FieldWithNoGroup":"no_group","SubrecordWithNoTag":{"WithTag":"tagged_child","WithoutTag":"untagged_child"}}`
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a"}}, expectedOnlyA)
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"b"}}, expectedOnlyB)
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a", "b"}}, expectedAAndB)
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a"}, OutputFieldsWithNoGroup: true}, expectedOnlyANoIgnores)
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"b"}, OutputFieldsWithNoGroup: true}, expectedOnlyBNoIgnores)
-	verifyOutputNoGroupTest(t, &v, &Options{Groups: []string{"a", "b"}, OutputFieldsWithNoGroup: true}, expectedAAndBNoIgnores)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"a"}}, expectedOnlyA)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"b"}}, expectedOnlyB)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"a", "b"}}, expectedAAndB)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"a"}, OutputFieldsWithNoGroup: true}, expectedOnlyANoIgnores)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"b"}, OutputFieldsWithNoGroup: true}, expectedOnlyBNoIgnores)
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"a", "b"}, OutputFieldsWithNoGroup: true}, expectedAAndBNoIgnores)
+}
+
+type LeafRecord struct {
+	TaggedInLeaf   string `groups:"leaf"`
+	UntaggedInLeaf string
+}
+
+type MidLevelRecord struct {
+	TaggedInMid   LeafRecord `groups:"mid"`
+	UntaggedInMid LeafRecord
+}
+
+type ParentRecord struct {
+	TaggedInParent   MidLevelRecord `groups:"parent"`
+	UntaggedInParent MidLevelRecord
+}
+
+func TestInheritMarshaling(t *testing.T) {
+	v := ParentRecord{
+		TaggedInParent: MidLevelRecord{
+			TaggedInMid: LeafRecord{
+				TaggedInLeaf:   "parentmidleaf",
+				UntaggedInLeaf: "parentmid_",
+			},
+			UntaggedInMid: LeafRecord{
+				TaggedInLeaf:   "parent_leaf",
+				UntaggedInLeaf: "parent__",
+			},
+		},
+		UntaggedInParent: MidLevelRecord{
+			TaggedInMid: LeafRecord{
+				TaggedInLeaf:   "_midleaf",
+				UntaggedInLeaf: "_mid_",
+			},
+			UntaggedInMid: LeafRecord{
+				TaggedInLeaf:   "__leaf",
+				UntaggedInLeaf: "___",
+			},
+		},
+	}
+	j, err := json.Marshal(&v)
+	assert.NoError(t, err, "failed baseline JSON marshal")
+	t.Log(`{"TaggedInParent":{"TaggedInMid":{"TaggedInLeaf":"parentmidleaf","UntaggedInLeaf":"parentmid_"},"UntaggedInMid":{"TaggedInLeaf":"parent_leaf","UntaggedInLeaf":"parent__"}},"UntaggedInParent":{"TaggedInMid":{"TaggedInLeaf":"_midleaf","UntaggedInLeaf":"_mid_"},"UntaggedInMid":{"TaggedInLeaf":"__leaf","UntaggedInLeaf":"___"}}}`)
+	expectedDefaultsNone := string(j)
+	expectedDefaultsLeaf := "{}"
+	expectedDefaultsMid := "{}"
+	expectedDefaultsParent := `{"TaggedInParent":{}}`
+	expectedInheritNone := string(j)
+	expectedInheritLeaf := "{}"
+	expectedInheritMid := "{}"
+	expectedInheritParent := `{"TaggedInParent":{"TaggedInMid":{"TaggedInLeaf":"parentmidleaf","UntaggedInLeaf":"parentmid_"},"UntaggedInMid":{"TaggedInLeaf":"parent_leaf","UntaggedInLeaf":"parent__"}}}`
+	expectedInheritParentMidIgnore := `{"TaggedInParent":{"TaggedInMid":{"TaggedInLeaf":"parentmidleaf","UntaggedInLeaf":"parentmid_"},"UntaggedInMid":{"TaggedInLeaf":"parent_leaf","UntaggedInLeaf":"parent__"}},"UntaggedInParent":{"TaggedInMid":{"TaggedInLeaf":"_midleaf","UntaggedInLeaf":"_mid_"},"UntaggedInMid":{"UntaggedInLeaf":"___"}}}`
+	expectedInheritLeafIgnore := `{"UntaggedInParent":{"UntaggedInMid":{"TaggedInLeaf":"__leaf","UntaggedInLeaf":"___"}}}`
+	verifyOutputGivenOptions(t, v, &Options{}, expectedDefaultsNone)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"leaf"}}, expectedDefaultsLeaf)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"mid"}}, expectedDefaultsMid)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"parent"}}, expectedDefaultsParent)
+	verifyOutputGivenOptions(t, v, &Options{InheritGroups: true}, expectedInheritNone)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"leaf"}, InheritGroups: true}, expectedInheritLeaf)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"mid"}, InheritGroups: true}, expectedInheritMid)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"parent"}, InheritGroups: true}, expectedInheritParent)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"parent", "mid"}, InheritGroups: true, OutputFieldsWithNoGroup: true}, expectedInheritParentMidIgnore)
+	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"leaf"}, InheritGroups: true, OutputFieldsWithNoGroup: true}, expectedInheritLeafIgnore)
 }
