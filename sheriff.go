@@ -31,8 +31,9 @@ type Options struct {
 	// fields, and only a small number are tagged as optional additional output.
 	OutputFieldsWithNoGroup bool
 
-	// This is used internally so that we can propagate anonymous fields groups tag to all child field.
-	nestedGroupsMap map[string][]string
+	// InheritGroups causes any group applied to a struct-type field to
+	// propagate to all fields of that struct.
+	InheritGroups bool
 }
 
 // MarshalInvalidTypeError is an error returned to indicate the wrong type has been
@@ -58,16 +59,15 @@ type Marshaller interface {
 // If the passed argument `data` is a struct, the return value will be of type `map[string]interface{}`.
 // In all other cases we can't derive the type in a meaningful way and is therefore an `interface{}`.
 func Marshal(options *Options, data interface{}) (interface{}, error) {
+	groups := make(groupSet)
+	groups.incrementGroups(options.Groups)
+	parents := make(groupSet)
+	return marshalObject(options, data, groups, parents, false)
+}
+
+func marshalObject(options *Options, data interface{}, groups, parents groupSet, embeddedParents bool) (interface{}, error) {
 	v := reflect.ValueOf(data)
 	t := v.Type()
-
-	// Initialise nestedGroupsMap,
-	// TODO: this may impact the performance, find a better place for this.
-	if options.nestedGroupsMap == nil {
-		options.nestedGroupsMap = make(map[string][]string)
-	}
-
-	checkGroups := len(options.Groups) > 0 || options.OutputFieldsWithNoGroup
 
 	if t.Kind() == reflect.Ptr {
 		// follow pointer
@@ -79,7 +79,7 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 	}
 
 	if t.Kind() != reflect.Struct {
-		return marshalValue(options, v)
+		return marshalValue(options, v, groups, parents, false)
 	}
 
 	dest := make(map[string]interface{})
@@ -115,70 +115,65 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 
 		// we can skip the group checkif if the field is a composition field
 		isEmbeddedField := field.Anonymous && val.Kind() == reflect.Struct
+		var groupNames []string
+		checkGroups := len(options.Groups) > 0 || (options.InheritGroups && len(parents) > 0) || options.OutputFieldsWithNoGroup
+		shouldShowFromGroup := true
+		if checkGroups {
+			if field.Tag.Get("groups") != "" {
+				groupNames = strings.Split(field.Tag.Get("groups"), ",")
+			}
+			hasExactMatch := groups.containsAny(groupNames)
+			hasParentMatch := false
+			if options.InheritGroups {
+				hasParentMatch = parents.containsAny(options.Groups)
+			} else if embeddedParents && len(groupNames) == 0 {
+				hasParentMatch = parents.containsAny(options.Groups)
+			}
+			hasNoGroup := (len(groupNames) == 0)
+			shouldShowFromGroup = hasExactMatch || hasParentMatch || (hasNoGroup && options.OutputFieldsWithNoGroup) || isEmbeddedField
+		}
 
-		if isEmbeddedField && field.Type.Kind() == reflect.Struct {
-			tt := field.Type
-			parentGroups := strings.Split(field.Tag.Get("groups"), ",")
-			for i := 0; i < tt.NumField(); i++ {
-				nestedField := tt.Field(i)
-				options.nestedGroupsMap[nestedField.Name] = parentGroups
+		shouldShowFromSince := true
+		if since := field.Tag.Get("since"); since != "" {
+			sinceVersion, err := version.NewVersion(since)
+			if err != nil {
+				return nil, err
+			}
+			if options.ApiVersion.LessThan(sinceVersion) {
+				shouldShowFromSince = false
 			}
 		}
 
-		if !isEmbeddedField {
-			if checkGroups {
-				var groups []string
-				if field.Tag.Get("groups") != "" {
-					groups = strings.Split(field.Tag.Get("groups"), ",")
-				}
-
-				if len(groups) == 0 && options.nestedGroupsMap[field.Name] != nil {
-					groups = append(groups, options.nestedGroupsMap[field.Name]...)
-				}
-				shouldShow := options.OutputFieldsWithNoGroup
-				if len(groups) > 0 {
-					shouldShow = listContains(groups, options.Groups)
-				}
-				if !shouldShow {
-					continue
-				}
+		shouldShowFromUntil := true
+		if until := field.Tag.Get("until"); until != "" {
+			untilVersion, err := version.NewVersion(until)
+			if err != nil {
+				return nil, err
 			}
-
-			if since := field.Tag.Get("since"); since != "" {
-				sinceVersion, err := version.NewVersion(since)
-				if err != nil {
-					return nil, err
-				}
-				if options.ApiVersion.LessThan(sinceVersion) {
-					continue
-				}
-			}
-
-			if until := field.Tag.Get("until"); until != "" {
-				untilVersion, err := version.NewVersion(until)
-				if err != nil {
-					return nil, err
-				}
-				if options.ApiVersion.GreaterThan(untilVersion) {
-					continue
-				}
+			if options.ApiVersion.GreaterThan(untilVersion) {
+				shouldShowFromUntil = false
 			}
 		}
 
-		v, err := marshalValue(options, val)
+		if options.InheritGroups || isEmbeddedField {
+			parents.incrementGroups(groupNames)
+		}
+		v, err := marshalValue(options, val, groups, parents, isEmbeddedField)
+		if options.InheritGroups || isEmbeddedField {
+			parents.decrementGroups(groupNames)
+		}
 		if err != nil {
 			return nil, err
 		}
-
-		// when a composition field we want to bring the child
-		// nodes to the top
-		nestedVal, ok := v.(map[string]interface{})
-		if isEmbeddedField && ok {
-			for key, value := range nestedVal {
-				dest[key] = value
+		if shouldShowFromGroup && shouldShowFromSince && shouldShowFromUntil {
+			nestedVal, ok := v.(map[string]interface{})
+			if isEmbeddedField && ok {
+				for k, v := range nestedVal {
+					dest[k] = v
+				}
+			} else {
+				dest[jsonTag] = v
 			}
-		} else {
-			dest[jsonTag] = v
 		}
 	}
 
@@ -188,7 +183,7 @@ func Marshal(options *Options, data interface{}) (interface{}, error) {
 // marshalValue is being used for getting the actual value of a field.
 //
 // There is support for types implementing the Marshaller interface, arbitrary structs, slices, maps and base types.
-func marshalValue(options *Options, v reflect.Value) (interface{}, error) {
+func marshalValue(options *Options, v reflect.Value, groups, parents groupSet, embeddedParents bool) (interface{}, error) {
 	// return nil on nil pointer struct fields
 	if !v.IsValid() || !v.CanInterface() {
 		return nil, nil
@@ -214,13 +209,13 @@ func marshalValue(options *Options, v reflect.Value) (interface{}, error) {
 	}
 
 	if k == reflect.Interface || k == reflect.Struct {
-		return Marshal(options, val)
+		return marshalObject(options, val, groups, parents, embeddedParents)
 	}
 	if k == reflect.Slice {
 		l := v.Len()
 		dest := make([]interface{}, l)
 		for i := 0; i < l; i++ {
-			d, err := marshalValue(options, v.Index(i))
+			d, err := marshalValue(options, v.Index(i), groups, parents, embeddedParents)
 			if err != nil {
 				return nil, err
 			}
@@ -238,7 +233,7 @@ func marshalValue(options *Options, v reflect.Value) (interface{}, error) {
 		}
 		dest := make(map[string]interface{})
 		for _, key := range mapKeys {
-			d, err := marshalValue(options, v.MapIndex(key))
+			d, err := marshalValue(options, v.MapIndex(key), groups, parents, embeddedParents)
 			if err != nil {
 				return nil, err
 			}
