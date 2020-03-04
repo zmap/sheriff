@@ -777,3 +777,21 @@ func TestMarshalBinary(t *testing.T) {
 	verifyOutputGivenOptions(t, &s, &Options{Groups: []string{"a"}}, `{"B":"aGVsbG8sIHdvcmxkIQ=="}`)
 	verifyOutputGivenOptions(t, &s, &Options{Groups: []string{"b"}}, `{}`)
 }
+
+type customJSONMarshaller struct {
+	S string `groups:"a"`
+}
+
+func (c *customJSONMarshaller) MarshalJSON() ([]byte, error) {
+	m := map[string]int{
+		"s": len(c.S),
+	}
+	return json.Marshal(m)
+}
+
+func TestMarshalJSONWithCustomMarshaller(t *testing.T) {
+	v := customJSONMarshaller{
+		S: "hello",
+	}
+	verifyOutputGivenOptions(t, &v, &Options{Groups: []string{"a"}}, `{"s":5}`)
+}
