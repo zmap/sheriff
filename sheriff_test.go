@@ -764,3 +764,16 @@ func TestInheritMarshaling(t *testing.T) {
 	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"parent", "mid"}, InheritGroups: true, OutputFieldsWithNoGroup: true}, expectedInheritParentMidIgnore)
 	verifyOutputGivenOptions(t, v, &Options{Groups: []string{"leaf"}, InheritGroups: true, OutputFieldsWithNoGroup: true}, expectedInheritLeafIgnore)
 }
+
+type structWithBinary struct {
+	B []byte `groups:"a"`
+}
+
+func TestMarshalBinary(t *testing.T) {
+	s := structWithBinary{
+		B: []byte("hello, world!"),
+	}
+	verifyOutputGivenOptions(t, &s, &Options{}, `{"B":"aGVsbG8sIHdvcmxkIQ=="}`)
+	verifyOutputGivenOptions(t, &s, &Options{Groups: []string{"a"}}, `{"B":"aGVsbG8sIHdvcmxkIQ=="}`)
+	verifyOutputGivenOptions(t, &s, &Options{Groups: []string{"b"}}, `{}`)
+}

@@ -197,7 +197,7 @@ func marshalValue(options *Options, v reflect.Value, groups, parents groupSet, e
 	// marshalled by sheriff because they'll be correctly marshalled by json.Marshal instead.
 	// Otherwise (e.g. net.IP) a byte slice may be output as a list of uints instead of as an IP string.
 	switch val.(type) {
-	case json.Marshaler, encoding.TextMarshaler, fmt.Stringer:
+	case json.Marshaler, encoding.TextMarshaler, fmt.Stringer, []byte:
 		return val, nil
 	}
 	k := v.Kind()
